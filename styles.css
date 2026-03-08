@@ -49,8 +49,8 @@ body {
     /* global Roboto font */
     font-family: "Roboto", sans-serif;
     font-size: var(--font-size-base);
-    color: var(--color-text) !important;
-    background: var(--color-background) !important;
+  background: var(--color-background); /* твой собственный цвет */
+  color: var(--color-text);
     min-height: 100vh;
     display: flex;
     flex-direction: column;
@@ -483,8 +483,4 @@ body {
 .account-note {
     font-size: 0.85rem;
     color: rgba(0, 0, 0, 0.6);
-}
-body {
-  background: var(--tg-theme-bg-color);
-  color: var(--tg-theme-text-color);
 }
