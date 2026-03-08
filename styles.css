@@ -484,7 +484,7 @@ body {
     font-size: 0.85rem;
     color: rgba(0, 0, 0, 0.6);
 }
-html, body {
-    background: #F5F6FA !important;
-    color: #202224 !important;
+body {
+  background: var(--tg-theme-bg-color);
+  color: var(--tg-theme-text-color);
 }
