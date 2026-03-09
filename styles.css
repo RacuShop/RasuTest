@@ -26,7 +26,7 @@
 
     /* element sizes */
     --header-height: 100px;
-    --bottom-nav-height: 80px;
+    --bottom-nav-height: 56px;
 
     --page-padding: clamp(8px, 3vw, 24px);      /* для малых экранов */
     --max-content-width: 2000px;  /* макс. ширина контента */
@@ -275,6 +275,15 @@ body {
     background: transparent;
     font-size: var(--btn-font-size);
     cursor: pointer;
+
+    /* center content so icon/text never shifts when state changes */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    /* prevent text/buttons from resizing when font-weight changes */
+    padding: 0;
+
     color: #d2d2d2; /* default grey */
     transition: color 0.15s;
 }
@@ -285,8 +294,12 @@ body {
 .nav-btn.active {
     font-weight: bold;
 }
-/* стили для иконок в нижней навигации */
+
+/* ensure SVG icons are centred and size-consistent */
 .nav-btn .nav-icon {
+    width: 35px;
+    height: 35px;
+    display: block;
     fill: var(--color-notactive); /* серый по умолчанию */
 }
 
@@ -294,7 +307,17 @@ body {
 .nav-btn.active .nav-icon,
 .nav-btn:active .nav-icon {
     fill: var(--color-text); /* твой синий цвет */
+}
 
+/* switch between two catalog icon variants */
+.nav-btn .cat2 {
+    display: none;
+}
+.nav-btn.active .cat1 {
+    display: none;
+}
+.nav-btn.active .cat2 {
+    display: block;
 }
 
 #cart-list {
