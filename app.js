@@ -22,24 +22,6 @@ function applyThemeOverride() {
     document.head.appendChild(style);
 }
 
-if (tg) {
-    tg.expand();
-    tg.MainButton.hide();
-
-    // apply theme parameters to css variables if available
-    const params = tg.themeParams;
-    if (params) {
-        const root = document.documentElement;
-        // map some common colors
-        if (params.bg_color) root.style.setProperty('--color-background', params.bg_color);
-        if (params.text_color) root.style.setProperty('--color-text', params.text_color);
-        if (params.button_color) root.style.setProperty('--color-primary', params.button_color);
-        if (params.button_text_color) root.style.setProperty('--color-text', params.button_text_color);
-    }
-
-    applyThemeOverride();
-}
-
 // Telegram user metadata (from the WebApp init data)
 const telegramUser = tg?.initDataUnsafe?.user || null;
 
