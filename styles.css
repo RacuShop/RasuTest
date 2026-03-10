@@ -104,7 +104,7 @@ body {
 }
 #category-filter button {
     padding: var(--space-sm) var(--space-md);
-    border: 1px solid var(--color-secondary);
+    border: 0.25px solid var(--color-secondary);
     border-radius: var(--radius-md);
     background: white;
     cursor: pointer;
@@ -266,7 +266,7 @@ body {
     height: var(--bottom-nav-height);
     background: white;
     display: flex;
-    border-top: 1px solid var(--color-secondary);
+    border-top: 0.25px solid var(--color-secondary);
     z-index: 1000;
 }
 .nav-btn {
