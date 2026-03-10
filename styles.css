@@ -295,8 +295,8 @@ body {
 
 /* ensure SVG icons are centred and size-consistent */
 .nav-btn .nav-icon {
-    width: 50px;
-    height: 50px;
+    width: 55px;
+    height: 55px;
     display: block;
     fill: var(--color-notactive); /* серый по умолчанию */
 }
@@ -317,31 +317,13 @@ body {
 .nav-btn.active .cat2 {
     display: block;
 }
-.nav-btn .cart2 {
+.nav-btn .cat2, .nav-btn .cart2, .nav-btn .acc2, .nav-btn .inf2 {
     display: none;
 }
-.nav-btn.active .cart1 {
+.nav-btn.active .cat1, .nav-btn.active .cart1, .nav-btn.active .acc1, .nav-btn.active .inf1 {
     display: none;
 }
-.nav-btn.active .cart2 {
-    display: block;
-}
-.nav-btn .acc2 {
-    display: none;
-}
-.nav-btn.active .acc1 {
-    display: none;
-}
-.nav-btn.active .acc2 {
-    display: block;
-}
-.nav-btn .inf2 {
-    display: none;
-}
-.nav-btn.active .inf1 {
-    display: none;
-}
-.nav-btn.active .inf2 {
+.nav-btn.active .cat2, .nav-btn.active .cart2, .nav-btn.active .acc2, .nav-btn.active .inf2 {
     display: block;
 }
 
