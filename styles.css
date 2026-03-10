@@ -282,6 +282,7 @@ body {
     display: flex;
     align-items: center;
     justify-content: center;
+    flex-direction: column;
 
     /* keep icons aligned when the active state uses bold text */
     padding: 0;
@@ -303,6 +304,8 @@ body {
     height: 55px;
     display: block;
     fill: var(--color-notactive); /* серый по умолчанию */
+    margin: 0 auto; /* центрирует иконку внутри кнопки */
+    flex-shrink: 0; /* предотвращает сжатие иконки на узких экранах */
 }
 
 /* активная кнопка — синяя иконка */
