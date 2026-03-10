@@ -275,19 +275,14 @@ body {
     flex: 1;
     border: none;
     background: transparent;
-    font-size: var(--btn-font-size);
     cursor: pointer;
 
-    /* center content so icon/text never shifts when state changes */
     display: flex;
     align-items: center;
     justify-content: center;
-    flex-direction: column;
 
-    /* keep icons aligned when the active state uses bold text */
-    padding: 0;
-
-    color: #d2d2d2; /* default grey */
+    font-size: var(--btn-font-size);
+    color: #d2d2d2;
     transition: color 0.15s;
 }
 .nav-btn.active,
@@ -296,6 +291,9 @@ body {
 }
 .nav-btn.active {
     font-weight: bold;
+}
+.nav-icon {
+    display: block;
 }
 
 /* ensure SVG icons are centred and size-consistent */
