@@ -109,9 +109,10 @@ body {
     background: white;
     cursor: pointer;
     flex-shrink: 0;
-    /* inherit global Roboto font */
-    font-family: inherit;
-    font-weight: 400;
+
+    font-family: 'Roboto', sans-serif;
+    font-weight: 500;
+    color: #202420;
 }
 #category-filter button.active {
     background: var(--color-primary);
