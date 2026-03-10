@@ -264,7 +264,7 @@ body {
     left: 0;
     right: 0;
     height: var(--bottom-nav-height);
-    background: white;
+    background: rgb(155, 137, 137);
     display: flex;
     padding: 0 calc(var(--page-padding) + env(safe-area-inset-left)) 0 calc(var(--page-padding) + env(safe-area-inset-right));
     border-top: 0.25px solid var(--color-secondary);
