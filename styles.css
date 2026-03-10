@@ -223,7 +223,6 @@ body {
     padding: var(--space-md);
     /* desktop cap: don’t let it grow too large even if the viewport is wide */
     max-width: 600px;
-    max-height: 80vh;
 }
 /* ensure images inside modal scale down on narrow screens */
 .modal img {
@@ -431,6 +430,25 @@ body {
     margin-left: auto; /* ← отодвигает крестик вправо (если нужно) */
 }
 
+.survey-btn {
+    margin-top: var(--space-sm);
+    padding: var(--space-xs) var(--space-md);
+    border-radius: var(--radius-md);
+    border: 1px solid var(--color-secondary);
+    background: white;
+    color: var(--color-text);
+    font-family: inherit;
+    cursor: pointer;
+    align-self: flex-start;
+    transition: background 0.2s, border-color 0.2s;
+}
+
+.survey-btn:hover,
+.survey-btn:active {
+    background: rgba(18, 18, 175, 0.05);
+    border-color: var(--color-primary);
+}
+
 .remove-btn:hover {
     color: rgb(18, 18, 175);
     transform: scale(1.1);
@@ -455,6 +473,10 @@ body {
 #cart-info,
 #cart-contract {
     padding: var(--space-md);
+}
+#cart-info {
+    text-align: center;
+    font-weight: 600;
 }
 #cart-contract {
     border-top: 1px solid var(--color-secondary);
@@ -532,4 +554,78 @@ body {
 .account-note {
     font-size: 0.85rem;
     color: rgba(0, 0, 0, 0.6);
+}
+
+/* Survey modal styles */
+.survey-modal {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-md);
+}
+
+.survey-modal h2 {
+    margin: 0;
+}
+
+.survey-section {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-sm);
+}
+
+.survey-radio-group {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-sm);
+}
+
+.survey-radio-group label {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-xs);
+    padding: var(--space-xs) var(--space-sm);
+    border: 1px solid var(--color-secondary);
+    border-radius: var(--radius-md);
+    cursor: pointer;
+    background: white;
+}
+
+.survey-radio-group label.selected {
+    border-color: var(--color-primary);
+    background: rgba(18, 18, 175, 0.08);
+}
+
+.survey-radio-group input[type="radio"] {
+    pointer-events: none;
+}
+
+.survey-textarea {
+    width: 100%;
+    min-height: 90px;
+    max-height: 200px;
+    padding: var(--space-sm);
+    border: 1px solid var(--color-secondary);
+    border-radius: var(--radius-md);
+    resize: vertical;
+    font-family: inherit;
+}
+
+.survey-footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: var(--space-sm);
+}
+
+.survey-save-btn {
+    padding: var(--space-sm) var(--space-md);
+    border-radius: var(--radius-md);
+    border: none;
+    background: var(--color-primary);
+    color: white;
+    cursor: pointer;
+}
+
+.survey-close-note {
+    font-size: 0.85rem;
+    color: rgba(0, 0, 0, 0.5);
 }

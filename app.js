@@ -41,10 +41,27 @@ const products = [
     { id: 6, title: 'Товар 6', categories: ['all','documents'], price: '600', img: 'https://i.postimg.cc/zDgGfv7r/No-Img.jpg', desc: 'Описание товара 6' },
 ];
 
+// Survey templates let you customize which question blocks appear per item.
+// You can add/remove blocks or create new templates for new products.
+const surveyTemplates = {
+    // special case: "Вывеска" имеет дополнительные вопросы and pricing logic
+    'Вывеска': {
+        fields: ['vectorFile', 'lightType', 'address', 'delivery'],
+    },
+    // default template: just a free-form notes field + delivery selection
+    default: {
+        fields: ['address', 'delivery'],
+    },
+};
+
 let state = {
     screen: 'catalog', // catalog, cart, account, about
     activeCategory: null,
     cart: [],
+    surveys: {},          // per-item survey answers
+    deliveryPrice: 0,     // global delivery fee (from survey selection)
+    modalMode: null,      // 'survey' | 'product' | null
+    modalItemId: null,    // which item is currently being edited in survey
 };
 
 // helpers
@@ -75,6 +92,36 @@ function calculateTotal() {
     return itemsTotal + delivery;
 }
 
+function getSurvey(itemId) {
+    if (!state.surveys[itemId]) {
+        state.surveys[itemId] = {
+            vectorFile: null,      // 'yes' | 'no'
+            lightType: 'none',     // 'none'|'front'|'back'
+            address: '',
+            delivery: state.deliveryPrice || 0,
+            autoAddedExpress: false,
+        };
+    }
+    return state.surveys[itemId];
+}
+
+function ensureProductInCart(productId) {
+    const exists = state.cart.some(i => i.id === productId);
+    if (!exists) {
+        const product = products.find(p => p.id === productId);
+        if (product) state.cart.push({ ...product });
+    }
+}
+
+function removeProductFromCart(productId) {
+    state.cart = state.cart.filter(i => i.id !== productId);
+}
+
+function getProductBasePrice(productId) {
+    const product = products.find(p => p.id === productId);
+    return product ? parseFloat(product.price) || 0 : 0;
+}
+
 // --- cart persistence helpers (localStorage) ---
 // use browser localStorage so that the cart survives page reloads and
 // closing the mini‑app. this works regardless of Telegram-specific APIs.
@@ -82,7 +129,15 @@ function loadCart() {
     try {
         const raw = localStorage.getItem('cart');
         if (raw) {
-            state.cart = JSON.parse(raw) || [];
+            const parsed = JSON.parse(raw);
+            if (Array.isArray(parsed)) {
+                // backwards compatibility: older versions stored only cart array
+                state.cart = parsed;
+            } else if (parsed && typeof parsed === 'object') {
+                state.cart = parsed.cart || [];
+                state.surveys = parsed.surveys || {};
+                state.deliveryPrice = parsed.deliveryPrice || 0;
+            }
         }
     } catch (e) {
         console.error('Ошибка чтения корзины из localStorage:', e);
@@ -91,7 +146,11 @@ function loadCart() {
 
 function saveCart() {
     try {
-        localStorage.setItem('cart', JSON.stringify(state.cart));
+        localStorage.setItem('cart', JSON.stringify({
+            cart: state.cart,
+            surveys: state.surveys,
+            deliveryPrice: state.deliveryPrice,
+        }));
     } catch (e) {
         console.error('Ошибка записи корзины в localStorage:', e);
     }
@@ -156,6 +215,9 @@ function renderCatalog() {
 
 function openModal(product) {
     const overlay = $('#modal-overlay');
+    state.modalMode = 'product';
+    state.modalItemId = null;
+
     const content = $('#modal-content');
     content.innerHTML = `
         <img src="${product.img}" alt="${product.title}" />
@@ -167,8 +229,137 @@ function openModal(product) {
     overlay.classList.remove('hidden');
 }
 
-function closeModal() {
+function closeModal({ save = true } = {}) {
+    if (save && state.modalMode === 'survey' && state.modalItemId != null) {
+        saveSurveyFromModal();
+    }
+    state.modalMode = null;
+    state.modalItemId = null;
     $('#modal-overlay').classList.add('hidden');
+}
+
+function openSurveyModal(item) {
+    state.modalMode = 'survey';
+    state.modalItemId = item.id;
+
+    const survey = getSurvey(item.id);
+    const overlay = $('#modal-overlay');
+    const content = $('#modal-content');
+
+    const template = surveyTemplates[item.title] || surveyTemplates.default;
+
+    const buildRadioGroup = (name, options, selectedValue) => {
+        const items = options.map(opt => {
+            const checked = String(opt.value) === String(selectedValue) ? 'checked' : '';
+            return `
+                <label class="survey-radio-item">
+                    <input type="radio" name="${name}" value="${opt.value}" ${checked} />
+                    <span>${opt.label}</span>
+                </label>`;
+        }).join('');
+        return `<div class="survey-radio-group">${items}</div>`;
+    };
+
+    const deliveryOptions = [
+        { label: 'Москва — 100 ₽', value: 100 },
+        { label: 'МО — 200 ₽', value: 200 },
+        { label: 'Другие регионы — 300 ₽', value: 300 },
+    ];
+
+    content.innerHTML = `
+        <div class="survey-modal">
+            <h2>Опрос: ${item.title}</h2>
+            ${template.fields.includes('vectorFile') ? `
+                <div class="survey-section">
+                    <div><strong>Есть ли векторный файл?</strong></div>
+                    ${buildRadioGroup('survey-vector', [
+                        { label: 'Да', value: 'yes' },
+                        { label: 'Нет (добавить разработку дизайна)', value: 'no' },
+                    ], survey.vectorFile)}
+                </div>
+                <div class="survey-section">
+                    <div><strong>Тип подсветки?</strong></div>
+                    ${buildRadioGroup('survey-light', [
+                        { label: 'Без подсветки', value: 'none' },
+                        { label: 'Спереди', value: 'front' },
+                        { label: 'Сзади +100₽', value: 'back' },
+                    ], survey.lightType)}
+                </div>
+                <div class="survey-section">
+                    <div><strong>Напишите адрес места установки:</strong></div>
+                    <textarea id="survey-address" class="survey-textarea" maxlength="2000" placeholder="Введите адрес...">${survey.address || ''}</textarea>
+                </div>
+            ` : `
+                <div class="survey-section">
+                    <div><strong>Комментарии по заказу</strong></div>
+                    <textarea id="survey-address" class="survey-textarea" maxlength="2000" placeholder="Введите дополнительные детали...">${survey.address || ''}</textarea>
+                </div>
+            `}
+            <div class="survey-section">
+                <div><strong>Выберите доставку:</strong></div>
+                ${buildRadioGroup('survey-delivery', deliveryOptions, survey.delivery || state.deliveryPrice || 0)}
+            </div>
+            <div class="survey-footer">
+                <button id="save-survey" class="survey-save-btn">Сохранить информацию</button>
+            </div>
+            <div class="survey-close-note">При закрытии окно сохраняется автоматически.</div>
+        </div>
+    `;
+
+    // ensure inputs scroll into view on mobile when focused
+    content.querySelectorAll('input, textarea').forEach(el => {
+        el.addEventListener('focus', () => {
+            setTimeout(() => el.scrollIntoView({ behavior: 'smooth', block: 'center' }), 250);
+        });
+    });
+
+    content.querySelector('#save-survey')?.addEventListener('click', () => {
+        saveSurveyFromModal();
+        closeModal({ save: false });
+    });
+
+    overlay.classList.remove('hidden');
+}
+
+function saveSurveyFromModal() {
+    if (state.modalMode !== 'survey' || state.modalItemId == null) return;
+    const itemId = state.modalItemId;
+    const item = state.cart.find(i => i.id === itemId);
+    if (!item) return;
+
+    const survey = getSurvey(itemId);
+
+    const vector = document.querySelector('input[name="survey-vector"]:checked')?.value;
+    const light = document.querySelector('input[name="survey-light"]:checked')?.value;
+    const address = document.getElementById('survey-address')?.value || '';
+    const delivery = document.querySelector('input[name="survey-delivery"]:checked')?.value;
+
+    if (vector) survey.vectorFile = vector;
+    if (light) survey.lightType = light;
+    survey.address = address.slice(0, 2000);
+
+    if (delivery) {
+        survey.delivery = parseFloat(delivery) || 0;
+        state.deliveryPrice = survey.delivery;
+    }
+
+    // special logic for "Вывеска"
+    if (item.title === 'Вывеска') {
+        if (survey.vectorFile === 'no') {
+            ensureProductInCart(1);
+            survey.autoAddedExpress = true;
+        } else if (survey.vectorFile === 'yes' && survey.autoAddedExpress) {
+            removeProductFromCart(1);
+            survey.autoAddedExpress = false;
+        }
+
+        const base = getProductBasePrice(itemId);
+        const extra = survey.lightType === 'back' ? 100 : 0;
+        item.price = base + extra;
+    }
+
+    saveCart();
+    renderCart();
 }
 
 function renderBottomNav() {
@@ -186,15 +377,31 @@ function renderCart() {
     state.cart.forEach(item => {
         const div = document.createElement('div');
         div.className = 'cart-item';
+
         div.innerHTML = `
             <img src="${item.img}" alt="${item.title}" />
             <div class="cart-item-info">
                 <div class="cart-item-title">${item.title}</div>
                 <div class="cart-item-price">${item.price} ₽</div>
+                <button data-id="${item.id}" class="survey-btn">Опрос</button>
             </div>
             <button data-id="${item.id}" class="remove-btn">✕</button>
         `;
+
+        div.querySelector('.survey-btn').addEventListener('click', () => {
+            openSurveyModal(item);
+        });
+
         div.querySelector('.remove-btn').addEventListener('click', () => {
+            // if we auto-added Экспресс-дизайн for this item, remove it too
+            const survey = state.surveys[item.id];
+            if (survey?.autoAddedExpress) {
+                removeProductFromCart(1);
+            }
+
+            // clean up any survey state for this item
+            delete state.surveys[item.id];
+
             state.cart = state.cart.filter(i => i.id !== item.id);
             saveCart();
             renderCart();
@@ -202,35 +409,22 @@ function renderCart() {
         list.appendChild(div);
     });
 
-    content.appendChild(createBlock(list));
-
-    // info message (at the top when cart is empty)
+    // info message (at the top of the cart)
     const info = document.createElement('div');
     info.id = 'cart-info';
     info.style.textAlign = 'center';
-    if (state.cart.length === 0) {
-        info.textContent = 'Добавьте услуги в корзину, чтобы оформить заказ.';
-        content.appendChild(info);
-        // do not show delivery section if cart is empty
-        return;
-    } else {
-        // ensure it's present but empty for potential later updates
-        info.textContent = '';
-        content.appendChild(info);
-    }
+    info.innerHTML = '<strong>Для оформления заказа заполните опрос</strong>';
+    content.appendChild(info);
 
-    // delivery options
-    const deliverySection = document.createElement('div');
-    deliverySection.id = 'cart-delivery';
-    deliverySection.innerHTML = `
-        <p>Выберите доставку:</p>
-        <div id="delivery-options">
-            <label><input type="radio" name="delivery" value="100"><span class="delivery-region">Москва</span><br><span class="delivery-price">100 ₽</span></label>
-            <label><input type="radio" name="delivery" value="200"><span class="delivery-region">МО</span><br><span class="delivery-price">200 ₽</span></label>
-            <label><input type="radio" name="delivery" value="300"><span class="delivery-region">Другие регионы</span><br><span class="delivery-price">300 ₽</span></label>
-        </div>
-    `;
-    content.appendChild(createBlock(deliverySection));
+    content.appendChild(createBlock(list));
+
+    if (state.cart.length === 0) {
+        const empty = document.createElement('div');
+        empty.style.textAlign = 'center';
+        empty.textContent = 'Добавьте услуги в корзину, чтобы оформить заказ.';
+        content.appendChild(empty);
+        return;
+    }
 
     // total display
     const totalDiv = document.createElement('div');
@@ -240,8 +434,8 @@ function renderCart() {
     content.appendChild(createBlock(totalDiv));
     
     // === Блок "Договор" с правильными отступами ===
-const contractContainer = document.createElement('div');
-contractContainer.id = 'cart-contract';
+    const contractContainer = document.createElement('div');
+    contractContainer.id = 'cart-contract';
 
 
 const contract = document.createElement('div');
@@ -262,46 +456,8 @@ content.appendChild(createBlock(contractContainer));
     agreeCheckbox.addEventListener('change', () => {
         payBtn.disabled = !agreeCheckbox.checked;
     });
-
-    // delivery change handling
-    const optionsContainer = deliverySection.querySelector('#delivery-options');
-    optionsContainer.addEventListener('change', e => {
-        if (e.target.name === 'delivery') {
-            state.deliveryPrice = parseFloat(e.target.value) || 0;
-            totalDiv.textContent = `Итого: ${calculateTotal()} ₽`;
-            saveCart();
-            // toggle selected class on labels
-            optionsContainer.querySelectorAll('label').forEach(label => {
-                const input = label.querySelector('input[name="delivery"]');
-                if (input && input.checked) {
-                    label.classList.add('selected');
-                } else {
-                    label.classList.remove('selected');
-                }
-            });
-        }
-    });
-
-    // preselect if saved
-    if (state.deliveryPrice) {
-        const inp = optionsContainer.querySelector(`input[value="${state.deliveryPrice}"]`);
-        if (inp) {
-            inp.checked = true;
-            inp.closest('label').classList.add('selected');
-        }
-        totalDiv.textContent = `Итого: ${calculateTotal()} ₽`;
-    }
-
-    // preselect if saved
-    if (state.deliveryPrice) {
-        const inp = deliverySection.querySelector(`input[value="${state.deliveryPrice}"]`);
-        if (inp) {
-            inp.checked = true;
-            inp.closest('label').classList.add('selected');
-        }
-        totalDiv.textContent = `Итого: ${calculateTotal()} ₽`;
-    }
 }
+
 
 function renderAbout() {
     const content = $('#content');
