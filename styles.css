@@ -299,8 +299,8 @@ body {
 
 /* ensure SVG icons are centred and size-consistent */
 .nav-btn .nav-icon {
-    width: 35px;
-    height: 35px;
+    width: 25px;
+    height: 25px;
     display: block;
     fill: var(--color-notactive); /* серый по умолчанию */
     margin: 0 auto; /* центрирует иконку внутри кнопки */
