@@ -280,7 +280,8 @@ body {
     /* center content so icon/text never shifts when state changes */
     display: flex;
     align-items: center;
-    justify-content: center;
+    justify-content: top;
+    margin-top: 10px;
     flex-direction: column;
 
     /* keep icons aligned when the active state uses bold text */
