@@ -371,6 +371,7 @@ function renderBottomNav() {
 function renderCart() {
     const content = $('#content');
     content.innerHTML = '';
+
     const list = document.createElement('div');
     list.id = 'cart-list';
 
@@ -393,69 +394,66 @@ function renderCart() {
         });
 
         div.querySelector('.remove-btn').addEventListener('click', () => {
-            // if we auto-added Экспресс-дизайн for this item, remove it too
             const survey = state.surveys[item.id];
             if (survey?.autoAddedExpress) {
                 removeProductFromCart(1);
             }
-
-            // clean up any survey state for this item
             delete state.surveys[item.id];
-
             state.cart = state.cart.filter(i => i.id !== item.id);
             saveCart();
-            renderCart();
+            renderCart(); // перерисовка после удаления
         });
+
         list.appendChild(div);
     });
 
-    // info message (at the top of the cart)
+    // === Единый информационный блок: текст зависит от состояния корзины ===
     const info = document.createElement('div');
     info.id = 'cart-info';
     info.style.textAlign = 'center';
-    info.innerHTML = '<strong>Для оформления заказа заполните опрос</strong>';
-    content.appendChild(info);
-
-    content.appendChild(createBlock(list));
-
+    
     if (state.cart.length === 0) {
-        const empty = document.createElement('div');
-        empty.style.textAlign = 'center';
-        empty.textContent = 'Добавьте услуги в корзину, чтобы оформить заказ.';
-        content.appendChild(empty);
-        return;
+        info.innerHTML = 'Добавьте услуги в корзину, чтобы оформить заказ.';
+    } else {
+        info.innerHTML = '<strong>Для оформления заказа заполните опрос</strong>';
     }
 
-    // total display
-    const totalDiv = document.createElement('div');
-    totalDiv.id = 'cart-total';
-    totalDiv.style.fontWeight = 'bold';
-    totalDiv.textContent = `Итого: ${calculateTotal()} ₽`;
-    content.appendChild(createBlock(totalDiv));
-    
-    // === Блок "Договор" с правильными отступами ===
-    const contractContainer = document.createElement('div');
-    contractContainer.id = 'cart-contract';
+    content.appendChild(createBlock(info));
 
+    // Показываем список и итог только если есть товары
+    if (state.cart.length > 0) {
+        content.appendChild(createBlock(list));
 
-const contract = document.createElement('div');
-contract.innerHTML = `
-    <label style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
-        <input type="checkbox" id="agree"> Я согласен
-    </label>
-    <button id="pay-button" disabled>
-        Оплатить заказ
-    </button>
-`;
-contractContainer.appendChild(contract);
-content.appendChild(createBlock(contractContainer));
+        // total display
+        const totalDiv = document.createElement('div');
+        totalDiv.id = 'cart-total';
+        totalDiv.style.fontWeight = 'bold';
+        totalDiv.textContent = `Итого: ${calculateTotal()} ₽`;
+        content.appendChild(createBlock(totalDiv));
 
-    // disable/enable pay button based on agreement checkbox
-    const payBtn = contract.querySelector('#pay-button');
-    const agreeCheckbox = contract.querySelector('#agree');
-    agreeCheckbox.addEventListener('change', () => {
-        payBtn.disabled = !agreeCheckbox.checked;
-    });
+        // === Блок "Договор" ===
+        const contractContainer = document.createElement('div');
+        contractContainer.id = 'cart-contract';
+
+        const contract = document.createElement('div');
+        contract.innerHTML = `
+            <label style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+                <input type="checkbox" id="agree"> Я согласен
+            </label>
+            <button id="pay-button" disabled>
+                Оплатить заказ
+            </button>
+        `;
+        contractContainer.appendChild(contract);
+        content.appendChild(createBlock(contractContainer));
+
+        // Привязка чекбокса к кнопке
+        const payBtn = contract.querySelector('#pay-button');
+        const agreeCheckbox = contract.querySelector('#agree');
+        agreeCheckbox.addEventListener('change', () => {
+            payBtn.disabled = !agreeCheckbox.checked;
+        });
+    }
 }
 
 

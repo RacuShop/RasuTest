@@ -89,6 +89,11 @@ body {
     flex: 1;
     overflow-y: auto;
 }
+/* Уменьшаем расстояние между хедером и первым блоком на экране */
+#content > .content-block:first-child {
+    margin-top: calc(-1 * var(--header-height) + 40px);
+    padding-top: 40px;
+}
 
 /* category filter */
 #category-filter {
@@ -350,6 +355,19 @@ body {
     flex-direction: column;
     gap: var(--space-md);
     
+}
+/* Отступ между информационным текстом и списком товаров */
+.content-block #cart-info + .content-block {
+    margin-top: 24px;
+}
+
+/* или проще — универсально: */
+#cart-info {
+    margin-bottom: 30px;
+}
+
+.content-block {
+    margin: 8px auto; /* уже уменьшенный отступ сверху/снизу */
 }
 
 /* delivery options styling */
