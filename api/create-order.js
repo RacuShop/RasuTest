@@ -16,7 +16,7 @@ export default async function handler(req, res) {
         const { telegramId, name, username, cartItems, survey, totalPrice } = req.body;
 
         // Validate required fields
-        if (!telegramId || !name || !cartItems || !survey) {
+        if (!telegramId || !name || !cartItems) {
             return res.status(400).json({ error: 'Missing required fields' });
         }
 
@@ -26,10 +26,10 @@ export default async function handler(req, res) {
             .join('\n');
 
         // Build readable survey answers text
-        const surveyText = Object.entries(survey)
-            .filter(([question, answer]) => answer !== null && answer !== undefined && answer !== '')
-            .map(([question, answer]) => `• ${question}: ${answer}`)
-            .join('\n');
+        const surveyText = Object.entries(survey || {})
+        .filter(([key, value]) => value)
+        .map(([key, value]) => `  • ${key}: ${value}`)
+        .join('\n');
 
         // Build order description
         const description = `Telegram ID: ${telegramId}
