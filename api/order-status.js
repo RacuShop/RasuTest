@@ -88,7 +88,7 @@ export default async function handler(req, res) {
         // Map WEEEK column IDs → status names
         const columnMap = {
             6: "Поступил заказ",
-            2: "Разработка",
+            7: "Разработка",
             3: "Согласование",
             4: "В производстве",
             5: "Доставка партнёром",
