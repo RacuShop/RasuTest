@@ -41,27 +41,61 @@ const products = [
     { id: 6, title: 'Товар 6', categories: ['all','documents'], price: '600', img: 'https://i.postimg.cc/zDgGfv7r/No-Img.jpg', desc: 'Описание товара 6' },
 ];
 
-// Survey templates let you customize which question blocks appear per item.
-// You can add/remove blocks or create new templates for new products.
-const surveyTemplates = {
-    // special case: "Вывеска" имеет дополнительные вопросы and pricing logic
-    'Вывеска': {
-        fields: ['vectorFile', 'lightType', 'address', 'delivery'],
+// Survey configuration for different categories
+const SURVEY_CONFIG = {
+    design: {
+        type: "textarea",
+        question: "Подробно опишите задачу",
+        hint: "Ваше название, род деятельности, ЦА и другие ваши пожелания",
+        placeholder: "Просим описать задачу максимально подробно, от этого зависит качество работы",
+        maxLength: 2000
     },
-    // default template: just a free-form notes field + delivery selection
-    default: {
-        fields: ['address', 'delivery'],
+
+    production: {
+        type: "buttons",
+        questions: [
+            {
+                question: "Подсветка",
+                answers: [
+                    { text: "Без подсветки", price: 0 },
+                    { text: "Спереди", price: 0 },
+                    { text: "Сзади", price: 100 }
+                ]
+            },
+            {
+                question: "Монтаж",
+                answers: [
+                    { text: "Самостоятельно", price: 0 },
+                    { text: "Нужен монтаж", price: 200 }
+                ]
+            },
+            {
+                question: "Адрес",
+                answers: [
+                    { text: "Москва", price: 0 },
+                    { text: "МО", price: 100 },
+                    { text: "Другие регионы", price: 200 }
+                ]
+            }
+        ]
     },
+
+    documents: {
+        type: "textarea",
+        question: "Подробно опишите задачу",
+        hint: "Временно не заполнено",
+        placeholder: "Опишите задачу",
+        maxLength: 2000
+    }
 };
 
 let state = {
     screen: 'catalog', // catalog, cart, account, about
     activeCategory: null,
-    cart: [],
-    surveys: {},          // per-item survey answers
-    deliveryPrice: 0,     // global delivery fee (from survey selection)
+    cart: [], // each item: { id, title, basePrice, finalPrice, category, surveyAnswers: [] }
     modalMode: null,      // 'survey' | 'product' | null
     modalItemId: null,    // which item is currently being edited in survey
+    productionSurvey: {}, // temporary storage for production survey before adding to cart
 };
 
 // helpers
@@ -85,32 +119,67 @@ function createBlock(element) {
 // calculate cart total including delivery
 function calculateTotal() {
     const itemsTotal = state.cart.reduce((sum, item) => {
-        const price = parseFloat(item.price) || 0;
-        return sum + price;
+        return sum + (item.finalPrice || 0);
     }, 0);
-    const delivery = state.deliveryPrice || 0;
-    return itemsTotal + delivery;
+    return itemsTotal;
 }
 
-function getSurvey(itemId) {
-    if (!state.surveys[itemId]) {
-        state.surveys[itemId] = {
-            vectorFile: null,      // 'yes' | 'no'
-            lightType: 'none',     // 'none'|'front'|'back'
-            address: '',
-            delivery: state.deliveryPrice || 0,
-            autoAddedExpress: false,
-        };
-    }
-    return state.surveys[itemId];
+// Survey helper functions
+function getSurveyConfigForProduct(productId) {
+    const category = getProductCategory(productId);
+    return SURVEY_CONFIG[category] || null;
 }
 
-function ensureProductInCart(productId) {
-    const exists = state.cart.some(i => i.id === productId);
-    if (!exists) {
-        const product = products.find(p => p.id === productId);
-        if (product) state.cart.push({ ...product });
+function isSurveyRequiredForProduct(productId) {
+    const category = getProductCategory(productId);
+    return category === 'production'; // Only production requires survey before adding to cart
+}
+
+function isSurveyCompleteForCartItem(item) {
+    if (!item.surveyAnswers || item.surveyAnswers.length === 0) {
+        return item.category !== 'design' && item.category !== 'documents'; // These categories require survey
     }
+
+    // For textarea surveys, check if there's text
+    if (item.category === 'design' || item.category === 'documents') {
+        return item.surveyAnswers.some(answer => answer.answer && answer.answer.trim().length > 0);
+    }
+
+    // For button surveys, check if all questions are answered
+    const config = SURVEY_CONFIG[item.category];
+    if (config && config.type === 'buttons') {
+        return item.surveyAnswers.length === config.questions.length;
+    }
+
+    return true;
+}
+
+function addProductToCart(productId) {
+    const product = products.find(p => p.id === productId);
+    if (!product) return;
+
+    const category = getProductCategory(productId);
+    const basePrice = parseFloat(product.price) || 0;
+
+    // Check if already in cart
+    const existingItem = state.cart.find(item => item.id === productId);
+    if (existingItem) {
+        // Update price if needed
+        existingItem.finalPrice = basePrice;
+        saveCart();
+        return;
+    }
+
+    state.cart.push({
+        id: product.id,
+        title: product.title,
+        basePrice: basePrice,
+        finalPrice: basePrice,
+        category: category,
+        surveyAnswers: []
+    });
+
+    saveCart();
 }
 
 function removeProductFromCart(productId) {
@@ -122,35 +191,68 @@ function getProductBasePrice(productId) {
     return product ? parseFloat(product.price) || 0 : 0;
 }
 
+function getProductCategory(productId) {
+    const product = products.find(p => p.id === productId);
+    if (!product) return null;
+
+    // Determine category based on product categories
+    if (product.categories.includes('design')) return 'design';
+    if (product.categories.includes('production')) return 'production';
+    if (product.categories.includes('documents')) return 'documents';
+    return null;
+}
+
+function updateCartItemPrice(itemId, extraPrice) {
+    const item = state.cart.find(i => i.id === itemId);
+    if (item) {
+        item.finalPrice = item.basePrice + extraPrice;
+        saveCart();
+        renderCart();
+    }
+}
+
+function updateCartItemSurvey(itemId, surveyAnswers) {
+    const item = state.cart.find(i => i.id === itemId);
+    if (item) {
+        item.surveyAnswers = surveyAnswers;
+        saveCart();
+        renderCart();
+    }
+}
+
 // --- cart persistence helpers (localStorage) ---
-// use browser localStorage so that the cart survives page reloads and
-// closing the mini‑app. this works regardless of Telegram-specific APIs.
 function loadCart() {
     try {
         const raw = localStorage.getItem('cart');
         if (raw) {
             const parsed = JSON.parse(raw);
             if (Array.isArray(parsed)) {
-                // backwards compatibility: older versions stored only cart array
-                state.cart = parsed;
-            } else if (parsed && typeof parsed === 'object') {
-                state.cart = parsed.cart || [];
-                state.surveys = parsed.surveys || {};
-                state.deliveryPrice = parsed.deliveryPrice || 0;
+                // Migrate old format to new format
+                state.cart = parsed.map(item => {
+                    const category = getProductCategory(item.id);
+                    const basePrice = parseFloat(item.price) || 0;
+                    return {
+                        id: item.id,
+                        title: item.title,
+                        basePrice: basePrice,
+                        finalPrice: basePrice,
+                        category: category,
+                        surveyAnswers: []
+                    };
+                });
+            } else {
+                state.cart = parsed || [];
             }
         }
     } catch (e) {
         console.error('Ошибка чтения корзины из localStorage:', e);
+        state.cart = [];
     }
 }
 
 function saveCart() {
     try {
-        localStorage.setItem('cart', JSON.stringify({
-            cart: state.cart,
-            surveys: state.surveys,
-            deliveryPrice: state.deliveryPrice,
-        }));
+        localStorage.setItem('cart', JSON.stringify(state.cart));
     } catch (e) {
         console.error('Ошибка записи корзины в localStorage:', e);
     }
@@ -215,18 +317,198 @@ function renderCatalog() {
 
 function openModal(product) {
     const overlay = $('#modal-overlay');
-    state.modalMode = 'product';
-    state.modalItemId = null;
+
+    if (isSurveyRequiredForProduct(product.id)) {
+        // For production items, show survey first
+        openProductionSurveyModal(product);
+    } else {
+        // For other items, show product details
+        state.modalMode = 'product';
+        state.modalItemId = null;
+
+        const content = $('#modal-content');
+        content.innerHTML = `
+            <img src="${product.img}" alt="${product.title}" />
+            <h2>${product.title}</h2>
+            <p>${product.desc}</p>
+            <p class="card-price">${product.price} ₽</p>
+            <button id="add-to-cart" data-id="${product.id}">Добавить в корзину</button>
+        `;
+        overlay.classList.remove('hidden');
+
+        // Add event listener for add to cart button
+        content.querySelector('#add-to-cart').addEventListener('click', () => {
+            addProductToCart(product.id);
+            closeModal({ save: false });
+            alert(`${product.title} добавлен в корзину!`);
+            switchScreen('cart');
+        });
+    }
+}
+
+function openProductionSurveyModal(product) {
+    state.modalMode = 'production-survey';
+    state.modalItemId = product.id;
+
+    const overlay = $('#modal-overlay');
+    const content = $('#modal-content');
+    const config = getSurveyConfigForProduct(product.id);
+
+    if (!config || config.type !== 'buttons') {
+        console.error('Invalid survey config for production item');
+        return;
+    }
+
+    // Initialize survey state
+    state.productionSurvey = {
+        productId: product.id,
+        currentQuestion: 0,
+        answers: [],
+        totalExtraPrice: 0
+    };
+
+    renderProductionSurveyQuestion();
+    overlay.classList.remove('hidden');
+}
+
+function renderProductionSurveyQuestion() {
+    const content = $('#modal-content');
+    const survey = state.productionSurvey;
+    const product = products.find(p => p.id === survey.productId);
+    const config = getSurveyConfigForProduct(survey.productId);
+    const question = config.questions[survey.currentQuestion];
+
+    content.innerHTML = `
+        <div class="production-survey-modal">
+            <div class="survey-progress">
+                Вопрос ${survey.currentQuestion + 1} из ${config.questions.length}
+            </div>
+            <h2>${product.title}</h2>
+            <div class="survey-question">
+                <div class="question-text">${question.question}</div>
+                <div class="answer-buttons">
+                    ${question.answers.map((answer, index) => `
+                        <button class="answer-btn" data-index="${index}" data-price="${answer.price}">
+                            ${answer.text}${answer.price > 0 ? ` (+${answer.price}₽)` : ''}
+                        </button>
+                    `).join('')}
+                </div>
+            </div>
+            <div class="survey-footer">
+                ${survey.currentQuestion > 0 ? '<button id="prev-question">Назад</button>' : ''}
+                <div class="price-info">
+                    Итого: ${(parseFloat(product.price) + survey.totalExtraPrice)}₽
+                </div>
+            </div>
+        </div>
+    `;
+
+    // Add event listeners
+    content.querySelectorAll('.answer-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            const index = parseInt(e.target.dataset.index);
+            const price = parseInt(e.target.dataset.price) || 0;
+            selectProductionSurveyAnswer(index, price);
+        });
+    });
+
+    if (content.querySelector('#prev-question')) {
+        content.querySelector('#prev-question').addEventListener('click', goToPreviousQuestion);
+    }
+}
+
+function selectProductionSurveyAnswer(answerIndex, extraPrice) {
+    const survey = state.productionSurvey;
+    const config = getSurveyConfigForProduct(survey.productId);
+    const question = config.questions[survey.currentQuestion];
+    const answer = question.answers[answerIndex];
+
+    // Save answer
+    survey.answers[survey.currentQuestion] = {
+        question: question.question,
+        answer: answer.text,
+        extraPrice: extraPrice
+    };
+
+    // Update total price
+    survey.totalExtraPrice = survey.answers.reduce((sum, ans) => sum + (ans?.extraPrice || 0), 0);
+
+    // Move to next question or finish
+    if (survey.currentQuestion < config.questions.length - 1) {
+        survey.currentQuestion++;
+        renderProductionSurveyQuestion();
+    } else {
+        finishProductionSurvey();
+    }
+}
+
+function goToPreviousQuestion() {
+    const survey = state.productionSurvey;
+    if (survey.currentQuestion > 0) {
+        // Remove current answer
+        survey.answers[survey.currentQuestion] = null;
+        // Recalculate total price
+        survey.totalExtraPrice = survey.answers.reduce((sum, ans) => sum + (ans?.extraPrice || 0), 0);
+        // Go back
+        survey.currentQuestion--;
+        renderProductionSurveyQuestion();
+    }
+}
+
+function finishProductionSurvey() {
+    const survey = state.productionSurvey;
+    const product = products.find(p => p.id === survey.productId);
+    const finalPrice = parseFloat(product.price) + survey.totalExtraPrice;
 
     const content = $('#modal-content');
     content.innerHTML = `
-        <img src="${product.img}" alt="${product.title}" />
-        <h2>${product.title}</h2>
-        <p>${product.desc}</p>
-        <p class="card-price">${product.price} ₽</p>
-        <button id="add-to-cart" data-id="${product.id}">Добавить в корзину</button>
+        <div class="production-survey-modal">
+            <div class="survey-progress">
+                Опрос завершен
+            </div>
+            <h2>${product.title}</h2>
+            <div class="survey-summary">
+                <div class="final-price">
+                    Итоговая цена: ${finalPrice}₽
+                </div>
+                <div class="survey-answers">
+                    ${survey.answers.filter(ans => ans).map(ans => `
+                        <div class="answer-summary">
+                            <strong>${ans.question}:</strong> ${ans.answer}
+                        </div>
+                    `).join('')}
+                </div>
+            </div>
+            <div class="survey-footer">
+                <button id="prev-question">Назад</button>
+                <button id="add-to-cart-final" class="primary-btn">Добавить в корзину</button>
+            </div>
+        </div>
     `;
-    overlay.classList.remove('hidden');
+
+    // Add event listeners
+    content.querySelector('#prev-question').addEventListener('click', goToPreviousQuestion);
+    content.querySelector('#add-to-cart-final').addEventListener('click', () => {
+        // Add to cart with survey answers
+        const cartItem = {
+            id: product.id,
+            title: product.title,
+            basePrice: parseFloat(product.price),
+            finalPrice: finalPrice,
+            category: 'production',
+            surveyAnswers: survey.answers.filter(ans => ans)
+        };
+
+        state.cart.push(cartItem);
+        saveCart();
+
+        // Close modal and show success
+        closeModal({ save: false });
+        alert(`${product.title} добавлен в корзину!`);
+
+        // Switch to cart view
+        switchScreen('cart');
+    });
 }
 
 function closeModal({ save = true } = {}) {
@@ -420,48 +702,58 @@ function renderCart() {
         const div = document.createElement('div');
         div.className = 'cart-item';
 
+        // Check if survey is required and completed
+        const surveyRequired = item.category === 'design' || item.category === 'documents';
+        const surveyCompleted = isSurveyCompleteForCartItem(item);
+
         div.innerHTML = `
-            <img src="${item.img}" alt="${item.title}" />
+            <img src="${item.img || 'https://via.placeholder.com/130x97?text=No+Image'}" alt="${item.title}" />
             <div class="cart-item-info">
                 <div class="cart-item-title">${item.title}</div>
-                <div class="cart-item-price">${item.price} ₽</div>
-                <button data-id="${item.id}" class="survey-btn">Опрос</button>
+                <div class="cart-item-price">${item.finalPrice} ₽</div>
+                ${surveyRequired ? `
+                    <button data-id="${item.id}" class="survey-btn ${surveyCompleted ? 'completed' : ''}">
+                        ${surveyCompleted ? 'Опрос заполнен' : 'Заполнить опрос'}
+                    </button>
+                ` : ''}
             </div>
             <button data-id="${item.id}" class="remove-btn">✕</button>
         `;
 
-        div.querySelector('.survey-btn').addEventListener('click', () => {
-            openSurveyModal(item);
-        });
+        if (surveyRequired) {
+            div.querySelector('.survey-btn').addEventListener('click', () => {
+                openCartItemSurveyModal(item);
+            });
+        }
 
         div.querySelector('.remove-btn').addEventListener('click', () => {
-            const survey = state.surveys[item.id];
-            if (survey?.autoAddedExpress) {
-                removeProductFromCart(1);
-            }
-            delete state.surveys[item.id];
             state.cart = state.cart.filter(i => i.id !== item.id);
             saveCart();
-            renderCart(); // перерисовка после удаления
+            renderCart();
         });
 
         list.appendChild(div);
     });
 
-    // === Единый информационный блок: текст зависит от состояния корзины ===
+    // Info block
     const info = document.createElement('div');
     info.id = 'cart-info';
     info.style.textAlign = 'center';
-    
+
     if (state.cart.length === 0) {
-        info.innerHTML = 'Добавьте услуги в корзину, чтобы оформить заказ.';
+        info.innerHTML = 'Для заказа добавьте товар в корзину';
     } else {
-        info.innerHTML = '<strong>Для оформления заказа заполните опрос</strong>';
+        const allSurveysCompleted = state.cart.every(item => isSurveyCompleteForCartItem(item));
+        if (allSurveysCompleted) {
+            info.innerHTML = '<strong>Все опросы заполнены. Можно оформлять заказ.</strong>';
+        } else {
+            info.innerHTML = '<strong>Заполните все опросы для оформления заказа</strong>';
+        }
     }
 
     content.appendChild(createBlock(info));
 
-    // Показываем список и итог только если есть товары
+    // Show list and total only if there are items
     if (state.cart.length > 0) {
         content.appendChild(createBlock(list));
 
@@ -472,14 +764,16 @@ function renderCart() {
         totalDiv.textContent = `Итого: ${calculateTotal()} ₽`;
         content.appendChild(createBlock(totalDiv));
 
-        // === Блок "Договор" ===
+        // Contract block
         const contractContainer = document.createElement('div');
         contractContainer.id = 'cart-contract';
 
+        const allSurveysCompleted = state.cart.every(item => isSurveyCompleteForCartItem(item));
         const contract = document.createElement('div');
         contract.innerHTML = `
             <label style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
-                <input type="checkbox" id="agree"> Я согласен
+                <input type="checkbox" id="agree">
+                Я согласен с условиями
             </label>
             <button id="pay-button" disabled>
                 Оплатить заказ
@@ -488,15 +782,90 @@ function renderCart() {
         contractContainer.appendChild(contract);
         content.appendChild(createBlock(contractContainer));
 
-        // Привязка чекбокса к кнопке
+        // Enable/disable pay button based on surveys and agreement
         const payBtn = contract.querySelector('#pay-button');
         const agreeCheckbox = contract.querySelector('#agree');
-        agreeCheckbox.addEventListener('change', () => {
-            payBtn.disabled = !agreeCheckbox.checked;
-        });
+
+        function updatePayButton() {
+            const surveysComplete = state.cart.every(item => isSurveyCompleteForCartItem(item));
+            const agreed = agreeCheckbox.checked;
+            payBtn.disabled = !surveysComplete || !agreed;
+        }
+
+        agreeCheckbox.addEventListener('change', updatePayButton);
+        updatePayButton(); // Initial check
     }
 }
 
+function openCartItemSurveyModal(item) {
+    state.modalMode = 'cart-survey';
+    state.modalItemId = item.id;
+
+    const overlay = $('#modal-overlay');
+    const content = $('#modal-content');
+    const config = getSurveyConfigForProduct(item.id);
+
+    if (!config) {
+        console.error('No survey config for item', item.id);
+        return;
+    }
+
+    content.innerHTML = `
+        <div class="cart-survey-modal">
+            <h2>Опрос: ${item.title}</h2>
+            ${config.type === 'textarea' ? `
+                <div class="survey-section">
+                    <div class="question-text">${config.question}</div>
+                    ${config.hint ? `<div class="question-hint" style="color: #636363; font-size: 0.9rem; margin-bottom: 8px;">${config.hint}</div>` : ''}
+                    <textarea id="survey-textarea" class="survey-textarea" maxlength="${config.maxLength}" placeholder="${config.placeholder}">${item.surveyAnswers[0]?.answer || ''}</textarea>
+                    <div class="char-counter" style="font-size: 0.8rem; color: #636363; text-align: right; margin-top: 4px;">
+                        <span id="char-count">${(item.surveyAnswers[0]?.answer || '').length}</span>/${config.maxLength}
+                    </div>
+                </div>
+            ` : ''}
+            <div class="survey-footer">
+                <button id="save-cart-survey" class="survey-save-btn">Сохранить</button>
+            </div>
+        </div>
+    `;
+
+    // Add character counter for textarea
+    if (config.type === 'textarea') {
+        const textarea = content.querySelector('#survey-textarea');
+        const counter = content.querySelector('#char-count');
+
+        textarea.addEventListener('input', () => {
+            counter.textContent = textarea.value.length;
+        });
+    }
+
+    content.querySelector('#save-cart-survey').addEventListener('click', () => {
+        saveCartItemSurvey(item.id);
+        closeModal({ save: false });
+    });
+
+    overlay.classList.remove('hidden');
+}
+
+function saveCartItemSurvey(itemId) {
+    const item = state.cart.find(i => i.id === itemId);
+    if (!item) return;
+
+    const config = getSurveyConfigForProduct(itemId);
+    if (!config) return;
+
+    if (config.type === 'textarea') {
+        const textarea = document.querySelector('#survey-textarea');
+        if (textarea) {
+            const answer = textarea.value.trim();
+            item.surveyAnswers = [{
+                question: config.question,
+                answer: answer
+            }];
+            updateCartItemSurvey(itemId, item.surveyAnswers);
+        }
+    }
+}
 
 function renderAbout() {
     const content = $('#content');

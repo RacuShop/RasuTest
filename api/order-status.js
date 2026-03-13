@@ -32,7 +32,7 @@ export default async function handler(req, res) {
         console.log('Searching for orders for Telegram ID:', telegramId);
 
         // Call WEEEK API to get tasks
-        // First, get all tasks from the project
+        // Get tasks from project 2 (where orders are created)
         const weeekResponse = await fetch(`https://api.weeek.net/public/v1/tm/tasks?projectId=2`, {
             method: 'GET',
             headers: {
@@ -51,7 +51,7 @@ export default async function handler(req, res) {
         }
 
         console.log('WEEEK response status:', weeekResponse.status);
-        console.log('WEEEK response data:', responseData);
+        console.log('WEEEK response data keys:', Object.keys(responseData));
 
         // Handle authentication errors
         if (weeekResponse.status === 401) {
@@ -75,11 +75,20 @@ export default async function handler(req, res) {
             });
         }
 
-        // Find tasks that contain this Telegram ID
-        const tasks = responseData?.data || responseData || [];
+        // WEEEK API returns data in different formats
+        // Try different possible structures
+        let tasks = [];
+        if (responseData.data && Array.isArray(responseData.data)) {
+            tasks = responseData.data;
+        } else if (Array.isArray(responseData)) {
+            tasks = responseData;
+        } else if (responseData.tasks && Array.isArray(responseData.tasks)) {
+            tasks = responseData.tasks;
+        }
+
         console.log('Found tasks:', tasks.length);
 
-        // Search for tasks containing the Telegram ID
+        // Search for tasks that contain the Telegram ID in description
         const userTasks = tasks.filter(task => {
             const description = task.description || '';
             return description.includes(`Telegram ID: ${telegramId}`);
@@ -94,21 +103,26 @@ export default async function handler(req, res) {
         }
 
         // Get the most recent task (assuming tasks are ordered by creation date)
+        // If not ordered, we might need to sort by createdAt or id
         const latestTask = userTasks[0];
 
         // Extract status from the task
-        // In WEEEK, status is usually in the column name or status field
+        // In WEEEK, status might be in different fields
         let status = 'Неизвестен';
 
         if (latestTask.columnName) {
             status = latestTask.columnName;
         } else if (latestTask.status) {
             status = latestTask.status;
-        } else if (latestTask.column) {
-            status = latestTask.column.name || latestTask.column.title || 'В работе';
+        } else if (latestTask.column && latestTask.column.name) {
+            status = latestTask.column.name;
+        } else if (latestTask.column && latestTask.column.title) {
+            status = latestTask.column.title;
+        } else if (latestTask.statusName) {
+            status = latestTask.statusName;
         }
 
-        console.log('Order status found:', status);
+        console.log('Order status found:', status, 'for task:', latestTask.id);
 
         return res.status(200).json({
             hasOrder: true,
