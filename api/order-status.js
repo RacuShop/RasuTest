@@ -102,24 +102,21 @@ export default async function handler(req, res) {
             });
         }
 
-        // Get the most recent task (assuming tasks are ordered by creation date)
-        // If not ordered, we might need to sort by createdAt or id
-        const latestTask = userTasks[0];
+        // Sort tasks by ID (newest first)
+        const sortedTasks = userTasks.sort((a, b) => (b.id || 0) - (a.id || 0));
+
+        const latestTask = sortedTasks[0];
 
         // Extract status from the task
         // In WEEEK, status might be in different fields
         let status = 'Неизвестен';
 
-        if (latestTask.columnName) {
-            status = latestTask.columnName;
-        } else if (latestTask.status) {
-            status = latestTask.status;
-        } else if (latestTask.column && latestTask.column.name) {
-            status = latestTask.column.name;
-        } else if (latestTask.column && latestTask.column.title) {
-            status = latestTask.column.title;
+        if (latestTask.column && latestTask.column.title) {
+        status = latestTask.column.title;
+        } else if (latestTask.columnName) {
+        status = latestTask.columnName;
         } else if (latestTask.statusName) {
-            status = latestTask.statusName;
+        status = latestTask.statusName;
         }
 
         console.log('Order status found:', status, 'for task:', latestTask.id);
