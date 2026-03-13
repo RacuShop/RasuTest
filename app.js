@@ -526,6 +526,54 @@ function renderAccount() {
         </div>
     `;
     content.appendChild(createBlock(accountCard));
+
+    // Order status block
+    const orderStatusBlock = document.createElement('div');
+    orderStatusBlock.className = 'profile-card';
+    orderStatusBlock.innerHTML = `
+        <div class="profile-card-title">
+            Статус заказа
+        </div>
+        <div id="order-status-content">
+            Загрузка...
+        </div>
+    `;
+    content.appendChild(createBlock(orderStatusBlock));
+
+    // Load order status
+    loadOrderStatus();
+}
+
+async function loadOrderStatus() {
+    const tg = window.Telegram?.WebApp;
+    const user = tg?.initDataUnsafe?.user;
+
+    if (!user) {
+        document.getElementById("order-status-content").innerText = "Не удалось получить данные пользователя";
+        return;
+    }
+
+    try {
+        const res = await fetch(`/api/order-status?telegramId=${user.id}`);
+        const data = await res.json();
+
+        const container = document.getElementById("order-status-content");
+
+        if (!data.hasOrder) {
+            container.innerHTML = "У вас нет активных заказов";
+            return;
+        }
+
+        container.innerHTML = `
+            <span class="status-pill">
+                ${data.status}
+            </span>
+        `;
+
+    } catch (err) {
+        console.error('Error loading order status:', err);
+        document.getElementById("order-status-content").innerText = "Не удалось загрузить статус";
+    }
 }
 
 function switchScreen(screen) {

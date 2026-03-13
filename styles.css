@@ -576,6 +576,35 @@ body {
     color: rgba(0, 0, 0, 0.6);
 }
 
+/* Order status block */
+.profile-card {
+    background: white;
+    border-radius: var(--radius-md);
+    padding: var(--space-md);
+    margin-top: var(--space-md);
+}
+
+.profile-card-title {
+    font-weight: 600;
+    margin-bottom: 10px;
+    font-size: 1rem;
+}
+
+#order-status-content {
+    font-size: 14px;
+    color: var(--color-text);
+}
+
+.status-pill {
+    display: inline-block;
+    padding: 6px 12px;
+    border-radius: 20px;
+    background: var(--color-primary);
+    color: white;
+    font-size: 13px;
+    font-weight: 500;
+}
+
 /* Survey modal styles */
 .survey-modal {
     display: flex;
