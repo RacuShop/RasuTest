@@ -87,12 +87,12 @@ export default async function handler(req, res) {
 
         // Map WEEEK column IDs → status names
         const columnMap = {
-            5: "Поступил заказ",
-            5: "Разработка",
-            8: "Согласование",
-            9: "В производстве",
-            10: "Доставка партнёром",
-            12: "Готово"
+            1: "Поступил заказ",
+            2: "Разработка",
+            3: "Согласование",
+            4: "В производстве",
+            5: "Доставка партнёром",
+            6: "Готово"
         };
 
         const columnId = latestTask.boardColumnId;
