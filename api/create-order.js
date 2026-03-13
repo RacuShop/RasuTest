@@ -32,13 +32,12 @@ export default async function handler(req, res) {
 
         // Build readable cart items text
         const cartItemsText = cartItems
-            .map(item => `• ${item.title} — ${item.price} ₽`)
+            .map(item => `• ${item.title} — ${item.finalPrice} ₽`)
             .join('\n');
 
         // Build readable survey answers text
-        const surveyText = Object.entries(survey || {})
-            .filter(([key, value]) => value)
-            .map(([key, value]) => `• ${key}: ${value}`)
+        const surveyText = (surveyAnswers || [])
+            .map(answer => `• ${answer.product}: ${answer.question} — ${answer.answer}`)
             .join('\n');
 
         // Build order description

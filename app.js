@@ -162,24 +162,32 @@ function addProductToCart(productId) {
     const basePrice = parseFloat(product.price) || 0;
 
     // Check if already in cart
-    const existingItem = state.cart.find(item => item.id === productId);
-    if (existingItem) {
-        // Update price if needed
-        existingItem.finalPrice = basePrice;
+    const existingItemIndex = state.cart.findIndex(item => item.id === productId);
+    if (existingItemIndex >= 0) {
+        // Update existing item
+        const existingItem = state.cart[existingItemIndex];
+        existingItem.title = product.title; // Update title in case it changed
+        existingItem.basePrice = basePrice;
+        existingItem.finalPrice = basePrice; // Reset to base price, survey will modify if needed
+        existingItem.category = category;
+        // Keep existing surveyAnswers
         saveCart();
-        return;
+        return existingItem;
     }
 
-    state.cart.push({
+    // Add new item
+    const newItem = {
         id: product.id,
         title: product.title,
         basePrice: basePrice,
         finalPrice: basePrice,
         category: category,
         surveyAnswers: []
-    });
+    };
 
+    state.cart.push(newItem);
     saveCart();
+    return newItem;
 }
 
 function removeProductFromCart(productId) {
@@ -230,14 +238,15 @@ function loadCart() {
                 // Migrate old format to new format
                 state.cart = parsed.map(item => {
                     const category = getProductCategory(item.id);
-                    const basePrice = parseFloat(item.price) || 0;
+                    const basePrice = parseFloat(item.price || item.basePrice) || 0;
+                    const finalPrice = parseFloat(item.finalPrice) || basePrice;
                     return {
                         id: item.id,
                         title: item.title,
                         basePrice: basePrice,
-                        finalPrice: basePrice,
+                        finalPrice: finalPrice,
                         category: category,
-                        surveyAnswers: []
+                        surveyAnswers: item.surveyAnswers || []
                     };
                 });
             } else {
@@ -335,14 +344,6 @@ function openModal(product) {
             <button id="add-to-cart" data-id="${product.id}">Добавить в корзину</button>
         `;
         overlay.classList.remove('hidden');
-
-        // Add event listener for add to cart button
-        content.querySelector('#add-to-cart').addEventListener('click', () => {
-            addProductToCart(product.id);
-            closeModal({ save: false });
-            alert(`${product.title} добавлен в корзину!`);
-            switchScreen('cart');
-        });
     }
 }
 
@@ -488,27 +489,6 @@ function finishProductionSurvey() {
 
     // Add event listeners
     content.querySelector('#prev-question').addEventListener('click', goToPreviousQuestion);
-    content.querySelector('#add-to-cart-final').addEventListener('click', () => {
-        // Add to cart with survey answers
-        const cartItem = {
-            id: product.id,
-            title: product.title,
-            basePrice: parseFloat(product.price),
-            finalPrice: finalPrice,
-            category: 'production',
-            surveyAnswers: survey.answers.filter(ans => ans)
-        };
-
-        state.cart.push(cartItem);
-        saveCart();
-
-        // Close modal and show success
-        closeModal({ save: false });
-        alert(`${product.title} добавлен в корзину!`);
-
-        // Switch to cart view
-        switchScreen('cart');
-    });
 }
 
 function closeModal({ save = true } = {}) {
@@ -971,14 +951,41 @@ on(document, 'click', '#modal-close', closeModal);
 on(document, 'click', '#modal-overlay', e => {
     if (e.target.id === 'modal-overlay') closeModal();
 });
-on(document, 'click', '#modal button#add-to-cart', e => {
-    const id = parseInt(e.target.dataset.id, 10);
-    const product = products.find(p => p.id === id);
-    if (product) {
-        state.cart.push(product);
-        saveCart();
-        closeModal();
+// Handle add to cart button in modal
+on(document, 'click', '#add-to-cart', e => {
+    const button = e.target;
+    const productId = parseInt(button.dataset.id, 10);
+    if (productId) {
+        addProductToCart(productId);
+        closeModal({ save: false });
+        const product = products.find(p => p.id === productId);
+        if (product) {
+            alert(`${product.title} добавлен в корзину!`);
+            switchScreen('cart');
+        }
     }
+});
+// Handle add to cart final button in production survey
+on(document, 'click', '#add-to-cart-final', e => {
+    const survey = state.productionSurvey;
+    const product = products.find(p => p.id === survey.productId);
+    const finalPrice = parseFloat(product.price) + survey.totalExtraPrice;
+
+    // Add to cart with survey answers using the proper function
+    const cartItem = addProductToCart(product.id);
+    if (cartItem) {
+        // Update the item with survey answers and final price
+        cartItem.finalPrice = finalPrice;
+        cartItem.surveyAnswers = survey.answers.filter(ans => ans);
+        saveCart();
+    }
+
+    // Close modal and show success
+    closeModal({ save: false });
+    alert(`${product.title} добавлен в корзину!`);
+
+    // Switch to cart view
+    switchScreen('cart');
 });
 on(document, 'click', '#bottom-nav .nav-btn', e => {
     const button = e.target.closest('.nav-btn');
@@ -1010,15 +1017,26 @@ on(document, 'click', '#pay-button', async (e) => {
         const username = telegramUser?.username || 'unknown';
         const totalPrice = calculateTotal();
 
-        // Collect survey data in readable format
-        const survey = collectSurveyData();
+        // Build survey answers from cart items
+        const surveyAnswers = [];
+        cartItems.forEach(item => {
+            if (item.surveyAnswers && item.surveyAnswers.length > 0) {
+                item.surveyAnswers.forEach(answer => {
+                    surveyAnswers.push({
+                        product: item.title,
+                        question: answer.question,
+                        answer: answer.answer
+                    });
+                });
+            }
+        });
 
         console.log('Sending order data:', {
             telegramId,
             name,
             username,
             cartItems,
-            survey,
+            surveyAnswers,
             totalPrice,
         });
 
@@ -1033,7 +1051,7 @@ on(document, 'click', '#pay-button', async (e) => {
                 name,
                 username,
                 cartItems,
-                survey,
+                surveyAnswers,
                 totalPrice,
             }),
         });
